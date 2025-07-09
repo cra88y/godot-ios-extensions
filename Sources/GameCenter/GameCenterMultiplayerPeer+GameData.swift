@@ -14,8 +14,7 @@ extension GameCenterMultiplayerPeer {
 	}
 
 	func encode(packedByteArray: PackedByteArray) -> Data? {
-		let bytes = [UInt8](packedByteArray)
-		let data: DataPacket = DataPacket(bytes: bytes)
+		let data: DataPacket = DataPacket(bytes: packedByteArray.asBytes())
 		return encode(dataPacket: data)
 	}
 
