@@ -414,8 +414,8 @@ class GameCenterMultiplayerPeer: MultiplayerPeerExtension {
 		currentTransferChannel = pChannel
 	}
 
+	// For some reason this override is not accepted by Godot
 	override func _getTransferChannel() -> Int32 {
-		// A bug somewhere in the GDExtension implementations complains that this function isn't overridden
 		return currentTransferChannel
 	}
 
@@ -423,8 +423,8 @@ class GameCenterMultiplayerPeer: MultiplayerPeerExtension {
 		currentTransferMode = pMode
 	}
 
+	// For some reason this override is not accepted by Godot
 	override func _getTransferMode() -> MultiplayerPeer.TransferMode {
-		// A bug somewhere in the GDExtension implementations complains that this function isn't overridden
 		return currentTransferMode
 	}
 
