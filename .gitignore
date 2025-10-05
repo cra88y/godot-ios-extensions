@@ -4,3 +4,8 @@
 .cache/
 .swiftpm/
 /bin/
+
+/TXTport
+txtport.ps1
+
+/.idea
