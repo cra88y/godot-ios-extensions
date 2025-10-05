@@ -45,7 +45,7 @@ let package = Package(
 
 	// MARK: Dependencies
 	dependencies: [
-		.package(url: "https://github.com/migueldeicaza/SwiftGodotBinary", from: "0.60.1")
+		.package(name: "SwiftGodot", path: "SwiftGodot")
 	],
 
 	// MARK: Targets

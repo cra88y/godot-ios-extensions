@@ -27,14 +27,13 @@ if [[ ! $CONFIG ]]; then
 	CONFIG="release"
 fi
 
-# This array is no longer needed here, but kept for structure if you add more commands
 COPY_COMMANDS=()
 
 # MARK: Build iOS
 
 build_ios() {
 	xcodebuild \
-		-scheme "iOS Plugins-Package" \
+		-scheme "iOS Plugins-Package"  \
 		-destination 'generic/platform=iOS' \
 		-derivedDataPath "$BUILD_PATH_IOS" \
 		-clonedSourcePackagesDirPath ".build" \
@@ -49,13 +48,13 @@ build_ios() {
 
 	echo "${BOLD}${GREEN}iOS build succeeded${RESET_FORMATTING}"
 
-	# Copy your built plugin frameworks
 	product_path="$BUILD_PATH_IOS/Build/Products/$1-iphoneos/PackageFrameworks"
 	source_path="Sources"
 	for source in $source_path/*; do
-		cp -af "$product_path/$source:t:r.framework" "$BINARY_PATH_IOS"
+		COPY_COMMANDS+=("cp -af ""$product_path/$source:t:r.framework ""$BINARY_PATH_IOS")
 	done
-	# --- The line copying SwiftGodot.framework has been removed from here ---
+
+	COPY_COMMANDS+=("cp -af ""$product_path/SwiftGodot.framework ""$BINARY_PATH_IOS")
 
 	return 0
 }
@@ -81,13 +80,13 @@ build_macos() {
 		product_path="$BUILD_PATH_MACOS/arm64-apple-macosx/$1"
 	fi
 
-	# Copy your built plugin dylibs
 	source_path="Sources"
-	for folder in $source_path/*; do
-		cp -af "$product_path/lib$folder:t:r.dylib" "$BINARY_PATH_MACOS"
+	for folder in $source_path/*
+	do
+		COPY_COMMANDS+=("cp -af $product_path/lib$folder:t:r.dylib $BINARY_PATH_MACOS")
 	done
 
-	# --- The line copying libSwiftGodot.dylib has been removed from here ---
+	COPY_COMMANDS+=("cp -af $product_path/libSwiftGodot.dylib $BINARY_PATH_MACOS")
 
 	return 0
 }
@@ -107,30 +106,17 @@ build_libs() {
 		build_ios "$2"
 	fi
 
-	# --- NEW SECTION: Copy the pre-compiled SwiftGodot binary ---
-	echo "${BOLD}${CYAN}Copying SwiftGodot binary...${RESET_FORMATTING}"
-	# Find the downloaded SwiftGodot.xcframework in the package cache
-	SWIFTGODOT_PATH=$(find .build -path "*/*/SwiftGodot.xcframework" -print -quit)
-
-	if [[ -z "$SWIFTGODOT_PATH" ]]; then
-		echo "${BOLD}${RED}Could not find SwiftGodot.xcframework. Please run 'swift package update' first.${RESET_FORMATTING}"
-		exit 1
+	if [[ ${#COPY_COMMANDS[@]} -gt 0 ]]; then
+		echo "${BOLD}${CYAN}Copying binaries...${RESET_FORMATTING}"
+		for instruction in ${COPY_COMMANDS[@]}
+		do
+			target=${instruction##* }
+			if ! [[ -e "$target" ]]; then
+				mkdir -p "$target"
+			fi
+			eval $instruction
+		done
 	fi
-
-	echo "Found SwiftGodot at: $SWIFTGODOT_PATH"
-
-	# Copy it to the iOS bin directory if needed
-	if [[ "$1" == "all" || "$1" == "ios" ]]; then
-		mkdir -p "$BINARY_PATH_IOS"
-		cp -R "$SWIFTGODOT_PATH" "$BINARY_PATH_IOS/"
-	fi
-
-	# Copy it to the macOS bin directory if needed
-	if [[ "$1" == "all" || "$1" == "macos" ]]; then
-		mkdir -p "$BINARY_PATH_MACOS"
-		cp -R "$SWIFTGODOT_PATH" "$BINARY_PATH_MACOS/"
-	fi
-	# --- END NEW SECTION ---
 
 	echo "${BOLD}${GREEN}Finished building $2 libraries for $1 platforms${RESET_FORMATTING}"
 }

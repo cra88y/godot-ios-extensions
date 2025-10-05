@@ -11,18 +11,36 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: 'latest-stable'
 
-      - name: Fetch Swift Packages
-        run: swift package resolve
+      - name: Cache SwiftGodot Build Artifacts
+        uses: actions/cache@v4
+        id: swiftgodot-build-cache
+        with:
+          path: SwiftGodot/.build
+          key: swiftgodot-build-${{ runner.os }}-${{ hashFiles('SwiftGodot/.git', 'SwiftGodot/Package.resolved') }}
+          restore-keys: |
+            swiftgodot-build-${{ runner.os }}-
+
+      - name: Report Cache Status
+        run: |
+          if [ "${{ steps.swiftgodot-build-cache.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ SwiftGodot build cache restored successfully."
+          else
+            echo "ℹ️ SwiftGodot build cache not found. A full build will be performed and cached for next time."
+          fi
 
       - name: Run build script
         run: |
           chmod +x build.sh
+          # The build script will now leverage the cached .build directory,
+          # significantly speeding up the SwiftGodot compilation.
           ./build.sh
 
       - name: Prepare Release Package
@@ -47,7 +65,6 @@ jobs:
           ios.release = "res://addons/ios/GameCenter.framework"
           
           [dependencies]
-          # --- CHANGE 3: Update macOS dependency to use the framework. ---
           macos.release = {"res://addons/macos/SwiftGodot.framework" : ""}
           ios.release = {"res://addons/ios/SwiftGodot.framework" : ""}
           EOF
@@ -63,7 +80,6 @@ jobs:
           ios.release = "res://addons/ios/Bonjour.framework"
 
           [dependencies]
-          # --- CHANGE 3: Update macOS dependency to use the framework. ---
           macos.release = {"res://addons/macos/SwiftGodot.framework" : ""}
           ios.release = {"res://addons/ios/SwiftGodot.framework" : ""}
           EOF
@@ -79,12 +95,11 @@ jobs:
           ios.release = "res://addons/ios/Haptics.framework"
 
           [dependencies]
-          # --- CHANGE 3: Update macOS dependency to use the framework. ---
           macos.release = {"res://addons/macos/SwiftGodot.framework" : ""}
           ios.release = {"res://addons/ios/SwiftGodot.framework" : ""}
           EOF
           
-          # --- InAppPurchase.gdextension (Added for completeness) ---
+          # --- InAppPurchase.gdextension ---
           cat > staging/InAppPurchase.gdextension <<EOF
           [configuration]
           entry_symbol = "swift_entry_point"
@@ -99,7 +114,7 @@ jobs:
           ios.release = {"res://addons/ios/SwiftGodot.framework" : ""}
           EOF
 
-          # --- Settings.gdextension (Added for completeness) ---
+          # --- Settings.gdextension ---
           cat > staging/Settings.gdextension <<EOF
           [configuration]
           entry_symbol = "swift_entry_point"
