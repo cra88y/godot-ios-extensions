@@ -185,44 +185,45 @@ class GameCenter: RefCounted, GKInviteEventListener {
 		}
 
 		onComplete.call(Variant(OK), Variant(self.player!))
-	}
+		}
 
 	/// Generates the necessary data to perform server-side authentication.
     ///
     /// - Parameters:
     /// 	- onComplete: Callback with parameter: (error: Variant, data: Variant) -> (error: Int, data: Dictionary)
     /// The dictionary contains: game_player_id, bundle_id, public_key_url, timestamp, salt, signature
-    func generateServerAuthData(onComplete: Callable) {
-        Task {
-            do {
-                // 1. Fetch the authentication items from GameKit
-                let (publicKeyURL, signature, salt, timestamp, _) = try await GKLocalPlayer.local.fetchItems()
+	func generateServerAuthData(onComplete: Callable) {
+			Task {
+				do {
+					// 1. Fetch the authentication items from GameKit
+					let (publicKeyURL, signature, salt, timestamp) = try await GKLocalPlayer.local.fetchItemsForIdentityVerificationSignature()
 
-                // 2. Get other required identifiers
-                guard let bundleID = Bundle.main.bundleIdentifier else {
-                    GD.pushError("[GameCenter] Could not retrieve bundle identifier.")
-                    throw GameCenterError.unknownError
-                }
-                let gamePlayerID = GKLocalPlayer.local.gamePlayerID
+					// 2. Get other required identifiers
+					guard let bundleID = Bundle.main.bundleIdentifier else {
+						GD.pushError("[GameCenter] Could not retrieve bundle identifier.")
+						throw GameCenterError.unknownError
+					}
+					let gamePlayerID = GKLocalPlayer.local.gamePlayerID
 
-                // 3. Prepare the data for Godot by creating a Dictionary
-                var authData = GDictionary()
-                authData["game_player_id"] = Variant(gamePlayerID)
-                authData["bundle_id"] = Variant(bundleID)
-                authData["public_key_url"] = Variant(publicKeyURL.absoluteString)
-                authData["timestamp"] = Variant(timestamp)
-                // Signature and Salt are Data objects, so we Base64-encode them into strings
-                authData["salt"] = Variant(salt.base64EncodedString())
-                authData["signature"] = Variant(signature.base64EncodedString())
+					// 3. Prepare the data for Godot by creating a Dictionary
+					var authData = GDictionary()
+					authData["game_player_id"] = Variant(gamePlayerID)
+					authData["bundle_id"] = Variant(bundleID)
+					authData["public_key_url"] = Variant(publicKeyURL.absoluteString)
+					authData["timestamp"] = Variant(timestamp)
+					// Signature and Salt are Data objects, so we Base64-encode them into strings
+					authData["salt"] = Variant(salt.base64EncodedString())
+					authData["signature"] = Variant(signature.base64EncodedString())
 
-                // 4. Send the data back to Godot
-                onComplete.callDeferred(Variant(OK), Variant(authData))
-            } catch {
-                GD.pushError("[GameCenter] Failed to generate server authentication data: \(error)")
-                onComplete.callDeferred(Variant(GameCenterError.failedToFetchAuthData.rawValue), nil)
-            }
-        }
-    }
+					// 4. Send the data back to Godot
+					onComplete.callDeferred(Variant(OK), Variant(authData))
+				} catch {
+					GD.pushError("[GameCenter] Failed to generate server authentication data: \(error)")
+					onComplete.callDeferred(Variant(GameCenterError.failedToFetchAuthData.rawValue), nil)
+				}
+			}
+		}
+
 
 	/// Load the profile picture of the authenticated player.
 	///
