@@ -281,9 +281,6 @@ class GameCenter: RefCounted, GKInviteEventListener {
 	// Because @Callable doesn't work in extensions
 
 	// General
-@Callable
-
-
 	@Callable
 	func is_authenticated() -> Bool {
 		return isAuthenticated()
@@ -294,9 +291,10 @@ class GameCenter: RefCounted, GKInviteEventListener {
 		getLocalPlayer(onComplete: onComplete)
 	}
 
-	func generate_server_auth_data(onComplete: Callable) {
-		generateServerAuthData(onComplete: onComplete)
-	}
+	@Callable
+    func generate_server_auth_data(onComplete: Callable) {
+        generateServerAuthData(onComplete: onComplete)
+    }
 
 	@Callable
 	func load_profile_picture(onComplete: Callable) {
