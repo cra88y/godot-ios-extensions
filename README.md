@@ -1,3 +1,5 @@
+#FORK NOTES: Initially aimed at retrieving GKLocalPlayer auth details for third party authentication.
+
 Some swift based extensions for iOS/macOS functionality, built on [SwiftGodot](https://github.com/migueldeicaza/SwiftGodot). 
 
 Everything is provided as-is, I've tried to keep things simple and readable to make up for the (current) lack of documentation.
