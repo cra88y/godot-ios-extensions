@@ -25,7 +25,7 @@ jobs:
         id: swiftgodot-build-cache
         with:
           path: SwiftGodot/.build
-          key: swiftgodot-build-${{ runner.os }}-${{ hashFiles('SwiftGodot/.git', 'SwiftGodot/Package.resolved') }}
+          key: swiftgodot-build-${{ runner.os }}-${{ hashFiles('SwiftGodot/Package.swift', 'SwiftGodot/Package.resolved') }}
           restore-keys: |
             swiftgodot-build-${{ runner.os }}-
 
