@@ -210,7 +210,7 @@ class GameCenter: RefCounted, GKInviteEventListener {
 					authData["game_player_id"] = Variant(gamePlayerID)
 					authData["bundle_id"] = Variant(bundleID)
 					authData["public_key_url"] = Variant(publicKeyURL.absoluteString)
-					authData["timestamp"] = Variant(timestamp)
+					authData["timestamp"] = Variant(String(timestamp))
 					// Signature and Salt are Data objects, so we Base64-encode them into strings
 					authData["salt"] = Variant(salt.base64EncodedString())
 					authData["signature"] = Variant(signature.base64EncodedString())
