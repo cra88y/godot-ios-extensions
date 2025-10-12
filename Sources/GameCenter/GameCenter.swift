@@ -32,7 +32,11 @@ class GameCenter: RefCounted, GKInviteEventListener {
 		case failedToFetchAuthData = 5 // Add this
 		case failedToLoadPicture = 8
 	}
+	@Signal var logMessage: SignalWithArguments<String>
 
+    private func log(_ message: String) {
+        logMessage.emit(message)
+    }
 	/// Signal called when a challenge was received
 	@Signal var challengeReceived: SignalWithArguments<GameCenterChallenge, GameCenterPlayer>
 
@@ -193,36 +197,45 @@ class GameCenter: RefCounted, GKInviteEventListener {
     /// 	- onComplete: Callback with parameter: (error: Variant, data: Variant) -> (error: Int, data: Dictionary)
     /// The dictionary contains: game_player_id, bundle_id, public_key_url, timestamp, salt, signature
 	func generateServerAuthData(onComplete: Callable) {
-			Task {
-				do {
-					// 1. Fetch the authentication items from GameKit
-					let (publicKeyURL, signature, salt, timestamp) = try await GKLocalPlayer.local.fetchItemsForIdentityVerificationSignature()
+        Task {
+            do {
+                log("[GameCenter] Starting server auth data generation")
 
-					// 2. Get other required identifiers
-					guard let bundleID = Bundle.main.bundleIdentifier else {
-						GD.pushError("[GameCenter] Could not retrieve bundle identifier.")
-						throw GameCenterError.unknownError
-					}
-					let gamePlayerID = GKLocalPlayer.local.gamePlayerID
+                let (publicKeyURL, signature, salt, timestamp) = try await GKLocalPlayer.local.fetchItemsForIdentityVerificationSignature()
 
-					// 3. Prepare the data for Godot by creating a Dictionary
-					var authData = GDictionary()
-					authData["game_player_id"] = Variant(gamePlayerID)
-					authData["bundle_id"] = Variant(bundleID)
-					authData["public_key_url"] = Variant(publicKeyURL.absoluteString)
-					authData["timestamp"] = Variant(String(timestamp))
-					// Signature and Salt are Data objects, so we Base64-encode them into strings
-					authData["salt"] = Variant(salt.base64EncodedString())
-					authData["signature"] = Variant(signature.base64EncodedString())
+                // Critical debugging for timestamp
+                log("[GameCenter] RAW timestamp from Apple: \(timestamp) (type: UInt64)")
+                log("[GameCenter] Timestamp as string: \(String(timestamp))")
+                log("[GameCenter] Timestamp digit count: \(String(timestamp).count)")
 
-					// 4. Send the data back to Godot
-					onComplete.callDeferred(Variant(OK), Variant(authData))
-				} catch {
-					GD.pushError("[GameCenter] Failed to generate server authentication data: \(error)")
-					onComplete.callDeferred(Variant(GameCenterError.failedToFetchAuthData.rawValue), nil)
-				}
-			}
-		}
+                guard let bundleID = Bundle.main.bundleIdentifier else {
+                    log("[GameCenter] ERROR: Could not retrieve bundle identifier")
+                    throw GameCenterError.unknownError
+                }
+
+                let gamePlayerID = GKLocalPlayer.local.gamePlayerID
+                log("[GameCenter] Player ID: \(gamePlayerID)")
+                log("[GameCenter] Bundle ID: \(bundleID)")
+                log("[GameCenter] Public Key URL: \(publicKeyURL.absoluteString)")
+                log("[GameCenter] Salt length: \(salt.count) bytes")
+                log("[GameCenter] Signature length: \(signature.count) bytes")
+
+                var authData = GDictionary()
+                authData["game_player_id"] = Variant(gamePlayerID)
+                authData["bundle_id"] = Variant(bundleID)
+                authData["public_key_url"] = Variant(publicKeyURL.absoluteString)
+                authData["timestamp"] = Variant(String(timestamp))
+                authData["salt"] = Variant(salt.base64EncodedString())
+                authData["signature"] = Variant(signature.base64EncodedString())
+
+                log("[GameCenter] Auth data prepared successfully")
+                onComplete.callDeferred(Variant(OK), Variant(authData))
+            } catch {
+                log("[GameCenter] ERROR: Failed to generate auth data: \(error)")
+                onComplete.callDeferred(Variant(GameCenterError.failedToFetchAuthData.rawValue), nil)
+            }
+        }
+    }
 
 
 	/// Load the profile picture of the authenticated player.
