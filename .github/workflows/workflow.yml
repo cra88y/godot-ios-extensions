@@ -20,28 +20,31 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
-      - name: Cache SwiftGodot Build Artifacts
+      - name: Get Xcode version
+        run: echo "XCODE_VERSION=$(xcodebuild -version | awk 'NR==1{print $2}')" >> $GITHUB_ENV
+
+      - name: Cache build artifacts (.build)
         uses: actions/cache@v4
-        id: swiftgodot-build-cache
+        id: build-cache
         with:
-          path: SwiftGodot/.build
-          key: swiftgodot-build-${{ runner.os }}-${{ hashFiles('SwiftGodot/Package.swift', 'SwiftGodot/Package.resolved') }}
+          path: .build
+          key: build-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-${{ hashFiles('Package.swift', 'Package.resolved', 'SwiftGodot/Package.swift', 'SwiftGodot/Package.resolved', 'build.sh') }}
           restore-keys: |
-            swiftgodot-build-${{ runner.os }}-
+            build-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-
+            build-${{ runner.os }}-${{ runner.arch }}-
+            build-${{ runner.os }}-
 
       - name: Report Cache Status
         run: |
-          if [ "${{ steps.swiftgodot-build-cache.outputs.cache-hit }}" = "true" ]; then
-            echo "✅ SwiftGodot build cache restored successfully."
+          if [ "${{ steps.build-cache.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Build cache restored successfully."
           else
-            echo "ℹ️ SwiftGodot build cache not found. A full build will be performed and cached for next time."
+            echo "ℹ️ Build cache not found. A full build will be performed and cached for next time."
           fi
 
       - name: Run build script
         run: |
           chmod +x build.sh
-          # The build script will now leverage the cached .build directory,
-          # significantly speeding up the SwiftGodot compilation.
           ./build.sh
 
       - name: Prepare Release Package
