@@ -203,25 +203,24 @@ class GameCenter: RefCounted, GKInviteEventListener {
 
                 let (publicKeyURL, signature, salt, timestamp) = try await GKLocalPlayer.local.fetchItemsForIdentityVerificationSignature()
 
-                // Critical debugging for timestamp
-                log("[GameCenter] RAW timestamp from Apple: \(timestamp) (type: UInt64)")
-                log("[GameCenter] Timestamp as string: \(String(timestamp))")
-                log("[GameCenter] Timestamp digit count: \(String(timestamp).count)")
+
 
                 guard let bundleID = Bundle.main.bundleIdentifier else {
                     log("[GameCenter] ERROR: Could not retrieve bundle identifier")
                     throw GameCenterError.unknownError
                 }
-
+				let teamPlayerID = GKLocalPlayer.local.teamPlayerID
                 let gamePlayerID = GKLocalPlayer.local.gamePlayerID
                 log("[GameCenter] Player ID: \(gamePlayerID)")
                 log("[GameCenter] Bundle ID: \(bundleID)")
                 log("[GameCenter] Public Key URL: \(publicKeyURL.absoluteString)")
                 log("[GameCenter] Salt length: \(salt.count) bytes")
                 log("[GameCenter] Signature length: \(signature.count) bytes")
+				log("[GameCenter] Timestamp: \(timestamp) (type: UInt64)")
 
                 var authData = GDictionary()
                 authData["game_player_id"] = Variant(gamePlayerID)
+                authData["team_player_id"] = Variant(teamPlayerID)
                 authData["bundle_id"] = Variant(bundleID)
                 authData["public_key_url"] = Variant(publicKeyURL.absoluteString)
                 authData["timestamp"] = Variant(String(timestamp))
