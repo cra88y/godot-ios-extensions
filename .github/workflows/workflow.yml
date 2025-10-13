@@ -15,8 +15,9 @@ jobs:
         with:
           submodules: 'recursive'
 
+      # ===== XCODE SETUP =====
       - name: Set Xcode Path (Self-Hosted)
-        if: runner.environment == 'self-hosted'
+        if: ${{ !startsWith(runner.name, 'GitHub Actions') }}
         run: |
           XCODE_PATH="/Applications/Xcode.app"
           if [ ! -d "$XCODE_PATH" ]; then
@@ -27,7 +28,7 @@ jobs:
           sudo xcode-select -s "$XCODE_PATH"
 
       - name: Select latest Xcode (GitHub-Hosted)
-        if: runner.environment == 'github-hosted'
+        if: startsWith(runner.name, 'GitHub Actions')
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: 'latest-stable'
@@ -36,7 +37,10 @@ jobs:
         run: |
           echo "Verifying Xcode installation:"
           xcodebuild -version
+          echo "Active developer directory:"
+          xcode-select -p
 
+      # ===== PACKAGE VERIFICATION =====
       - name: Verify Package.resolved exists
         run: |
           if [ ! -f "Package.resolved" ]; then
@@ -46,6 +50,7 @@ jobs:
           echo "✅ Package.resolved found"
           echo "Package.resolved hash: ${{ hashFiles('Package.resolved') }}"
 
+      # ===== CACHING =====
       - name: Cache SwiftGodot dependencies
         uses: actions/cache@v4
         id: swiftgodot-cache
@@ -57,6 +62,7 @@ jobs:
           key: swiftgodot-spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
           restore-keys: |
             swiftgodot-spm-${{ runner.os }}-${{ runner.arch }}-
+            swiftgodot-spm-${{ runner.os }}-
 
       - name: Report Cache Status
         run: |
@@ -68,6 +74,7 @@ jobs:
             echo "Attempted key: swiftgodot-spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}"
           fi
 
+      # ===== BUILD =====
       - name: Run build script
         run: |
           chmod +x build.sh
@@ -82,6 +89,7 @@ jobs:
           echo "=== Total .build size ==="
           du -sh .build/ 2>/dev/null || echo "No .build directory"
 
+      # ===== PACKAGING =====
       - name: Prepare Release Package
         run: |
           mkdir -p staging/addons/ios
@@ -94,7 +102,7 @@ jobs:
           echo "Creating .gdextension files..."
           
           # --- GameCenter.gdextension ---
-          cat > staging/GameCenter.gdextension <<EOF
+          cat > staging/GameCenter.gdextension <<'EOF'
           [configuration]
           entry_symbol = "swift_entry_point"
           compatibility_minimum = "4.2"
@@ -109,7 +117,7 @@ jobs:
           EOF
 
           # --- Bonjour.gdextension ---
-          cat > staging/Bonjour.gdextension <<EOF
+          cat > staging/Bonjour.gdextension <<'EOF'
           [configuration]
           entry_symbol = "swift_entry_point"
           compatibility_minimum = "4.2"
@@ -124,7 +132,7 @@ jobs:
           EOF
           
           # --- Haptics.gdextension ---
-          cat > staging/Haptics.gdextension <<EOF
+          cat > staging/Haptics.gdextension <<'EOF'
           [configuration]
           entry_symbol = "swift_entry_point"
           compatibility_minimum = "4.2"
@@ -139,7 +147,7 @@ jobs:
           EOF
           
           # --- InAppPurchase.gdextension ---
-          cat > staging/InAppPurchase.gdextension <<EOF
+          cat > staging/InAppPurchase.gdextension <<'EOF'
           [configuration]
           entry_symbol = "swift_entry_point"
           compatibility_minimum = "4.2"
@@ -154,7 +162,7 @@ jobs:
           EOF
 
           # --- Settings.gdextension ---
-          cat > staging/Settings.gdextension <<EOF
+          cat > staging/Settings.gdextension <<'EOF'
           [configuration]
           entry_symbol = "swift_entry_point"
           compatibility_minimum = "4.2"
@@ -171,6 +179,7 @@ jobs:
           echo "Creating ZIP archive..."
           (cd staging && zip -r ../godot-ios-extensions.zip .)
 
+      # ===== RELEASE =====
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
