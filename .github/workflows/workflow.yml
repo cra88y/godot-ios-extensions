@@ -15,37 +15,72 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Select latest Xcode
+      - name: Set Xcode Path (Self-Hosted)
+        if: runner.environment == 'self-hosted'
+        run: |
+          XCODE_PATH="/Applications/Xcode.app"
+          if [ ! -d "$XCODE_PATH" ]; then
+            echo "::error::Xcode not found at '$XCODE_PATH'. Please install Xcode on your self-hosted runner."
+            exit 1
+          fi
+          echo "Using Xcode at: $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH"
+
+      - name: Select latest Xcode (GitHub-Hosted)
+        if: runner.environment == 'github-hosted'
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: 'latest-stable'
 
-      - name: Get Xcode version
-        run: echo "XCODE_VERSION=$(xcodebuild -version | awk 'NR==1{print $2}')" >> $GITHUB_ENV
+      - name: Verify Xcode Installation
+        run: |
+          echo "Verifying Xcode installation:"
+          xcodebuild -version
 
-      - name: Cache build artifacts (.build)
+      - name: Verify Package.resolved exists
+        run: |
+          if [ ! -f "Package.resolved" ]; then
+            echo "::error::Package.resolved not found. Ensure it's committed to git."
+            exit 1
+          fi
+          echo "✅ Package.resolved found"
+          echo "Package.resolved hash: ${{ hashFiles('Package.resolved') }}"
+
+      - name: Cache SwiftGodot dependencies
         uses: actions/cache@v4
-        id: build-cache
+        id: swiftgodot-cache
         with:
-          path: .build
-          key: build-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-${{ hashFiles('Package.swift', 'Package.resolved', 'SwiftGodot/Package.swift', 'SwiftGodot/Package.resolved', 'build.sh') }}
+          path: |
+            .build/repositories
+            .build/checkouts
+            .build/workspace-state.json
+          key: swiftgodot-spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
           restore-keys: |
-            build-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-
-            build-${{ runner.os }}-${{ runner.arch }}-
-            build-${{ runner.os }}-
+            swiftgodot-spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Report Cache Status
         run: |
-          if [ "${{ steps.build-cache.outputs.cache-hit }}" = "true" ]; then
-            echo "✅ Build cache restored successfully."
+          if [ "${{ steps.swiftgodot-cache.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ SwiftGodot dependency cache HIT - skipping download"
+            echo "Cache key: swiftgodot-spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}"
           else
-            echo "ℹ️ Build cache not found. A full build will be performed and cached for next time."
+            echo "ℹ️ SwiftGodot dependency cache MISS - will download from GitHub"
+            echo "Attempted key: swiftgodot-spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}"
           fi
 
       - name: Run build script
         run: |
           chmod +x build.sh
           ./build.sh
+
+      - name: Cache Statistics
+        if: always()
+        run: |
+          echo "=== Cache Directory Sizes ==="
+          du -sh .build/repositories 2>/dev/null || echo "No repositories directory"
+          du -sh .build/checkouts 2>/dev/null || echo "No checkouts directory"
+          echo "=== Total .build size ==="
+          du -sh .build/ 2>/dev/null || echo "No .build directory"
 
       - name: Prepare Release Package
         run: |
