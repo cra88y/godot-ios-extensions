@@ -1,4 +1,7 @@
-#FORK NOTES: Initially aimed at retrieving GKLocalPlayer auth details for third party authentication.
+# FORK NOTES: Initially aimed at retrieving GKLocalPlayer auth details for third party authentication. 
+Changed in fork- 
+ - added a build workflow
+ - added callback for `func fetchItemsForIdentityVerificationSignature() async throws -> (URL, Data, Data, UInt64)`
 
 Some swift based extensions for iOS/macOS functionality, built on [SwiftGodot](https://github.com/migueldeicaza/SwiftGodot). 
 
