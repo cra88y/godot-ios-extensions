@@ -35,8 +35,8 @@ class InAppPurchase: RefCounted {
 		case error = 2
 	}
 
-	/// Called when a product is puchased
-	@Signal var productPurchased: SignalWithArguments<String>
+	/// Called when a product is purchased — (productID: String, jwsRepresentation: String)
+	@Signal var productPurchased: SignalWithArguments<String, String>
 	/// Called when a purchase is revoked
 	@Signal var productRevoked: SignalWithArguments<String>
 
@@ -89,9 +89,12 @@ class InAppPurchase: RefCounted {
 					case .success(let verification):
 						// Success
 						let transaction: Transaction = try checkVerified(verification)
+						let jws: String = transaction.jwsRepresentation
 						await transaction.finish()
 
 						self.purchasedProducts.insert(transaction.productID)
+
+						self.productPurchased.emit(transaction.productID, jws)
 
 						onComplete.callDeferred(
 							Variant(OK),
@@ -317,7 +320,7 @@ class InAppPurchase: RefCounted {
 				do {
 					let transaction: Transaction = try self.checkVerified(result)
 					if transaction.revocationDate == nil {
-						self.productPurchased.emit(transaction.productID)
+						self.productPurchased.emit(transaction.productID, transaction.jwsRepresentation)
 					} else {
 						self.productRevoked.emit(transaction.productID)
 					}

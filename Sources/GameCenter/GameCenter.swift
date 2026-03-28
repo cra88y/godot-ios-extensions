@@ -199,11 +199,7 @@ class GameCenter: RefCounted, GKInviteEventListener {
 	func generateServerAuthData(onComplete: Callable) {
         Task {
             do {
-                log("[GameCenter] Starting server auth data generation")
-
                 let (publicKeyURL, signature, salt, timestamp) = try await GKLocalPlayer.local.fetchItemsForIdentityVerificationSignature()
-
-
 
                 guard let bundleID = Bundle.main.bundleIdentifier else {
                     log("[GameCenter] ERROR: Could not retrieve bundle identifier")
@@ -211,12 +207,6 @@ class GameCenter: RefCounted, GKInviteEventListener {
                 }
 				let teamPlayerID = GKLocalPlayer.local.teamPlayerID
                 let gamePlayerID = GKLocalPlayer.local.gamePlayerID
-                log("[GameCenter] Player ID: \(gamePlayerID)")
-                log("[GameCenter] Bundle ID: \(bundleID)")
-                log("[GameCenter] Public Key URL: \(publicKeyURL.absoluteString)")
-                log("[GameCenter] Salt length: \(salt.count) bytes")
-                log("[GameCenter] Signature length: \(signature.count) bytes")
-				log("[GameCenter] Timestamp: \(timestamp) (type: UInt64)")
 
                 var authData = GDictionary()
                 authData["game_player_id"] = Variant(gamePlayerID)
@@ -227,7 +217,6 @@ class GameCenter: RefCounted, GKInviteEventListener {
                 authData["salt"] = Variant(salt.base64EncodedString())
                 authData["signature"] = Variant(signature.base64EncodedString())
 
-                log("[GameCenter] Auth data prepared successfully")
                 onComplete.callDeferred(Variant(OK), Variant(authData))
             } catch {
                 log("[GameCenter] ERROR: Failed to generate auth data: \(error)")
