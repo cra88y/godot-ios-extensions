@@ -233,6 +233,38 @@ class InAppPurchase: RefCounted {
 		}
 	}
 
+	/// Restore purchases and return productID → JWS dictionary directly.
+	/// Unlike restorePurchases (signal-based), this returns results via callback.
+	/// Only non-consumable and auto-renewable entitlements are returned.
+	///
+	/// - Parameter onComplete: Callback with parameters: (error: Variant, result: Variant) -> (error: Int, result: Dictionary[String, String])
+	@Callable(autoSnakeCase: true)
+	func restoreAndReconcile(onComplete: Callable) {
+		Task {
+			do {
+				try await AppStore.sync()
+				var result = Dictionary()
+				for await vr: VerificationResult<Transaction> in Transaction.currentEntitlements {
+					if case .verified(let transaction) = vr {
+						let jws: String
+						if #available(iOS 16.0, macOS 13.0, *) {
+							jws = vr.jwsRepresentation
+						} else {
+							jws = ""
+						}
+						result[Variant(transaction.productID)] = Variant(jws)
+					}
+				}
+				onComplete.callDeferred(Variant(OK), Variant(result))
+			} catch {
+				onComplete.callDeferred(
+					Variant(InAppPurchaseError.failedToRestorePurchases.rawValue),
+					nil
+				)
+			}
+		}
+	}
+
 	/// Get the current app environment
 	///
 	/// NOTE: On iOS 16 this might display a system prompt that asks users to authenticate
