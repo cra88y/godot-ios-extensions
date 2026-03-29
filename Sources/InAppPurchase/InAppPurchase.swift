@@ -37,8 +37,8 @@ class InAppPurchase: RefCounted {
 
 	/// Called when a product is purchased — (productID: String, jwsRepresentation: String)
 	@Signal var productPurchased: SignalWithArguments<String, String>
-	/// Called when a purchase is revoked — (productID: String, revocationDateMs: String)
-	@Signal var productRevoked: SignalWithArguments<String, String>
+	/// Called when a purchase is revoked — (productID: String, revocationDateMs: String, revocationReason: String)
+	@Signal var productRevoked: SignalWithArguments<String, String, String>
 
 	private(set) var productIDs: [String] = []
 
@@ -217,6 +217,22 @@ class InAppPurchase: RefCounted {
 		}
 	}
 
+	/// Get pending transactions (awaiting parental approval, payment processing, etc.)
+	///
+	/// - Parameter onComplete: Callback with parameters: (error: Variant, productIDs: Variant) -> (error: Int, productIDs: [String])
+	@Callable(autoSnakeCase: true)
+	func getPendingTransactions(onComplete: Callable) {
+		Task {
+			var pending = VariantArray()
+			for await result: VerificationResult<Transaction> in Transaction.unfinished {
+				if case .verified(let transaction) = result {
+					pending.append(Variant(transaction.productID))
+				}
+			}
+			onComplete.callDeferred(Variant(OK), Variant(pending))
+		}
+	}
+
 	/// Get the current app environment
 	///
 	/// NOTE: On iOS 16 this might display a system prompt that asks users to authenticate
@@ -343,7 +359,13 @@ class InAppPurchase: RefCounted {
 						self.productPurchased.emit(transaction.productID, jws)
 					} else {
 						let revDateMs = String(Int64(transaction.revocationDate!.timeIntervalSince1970 * 1000))
-						self.productRevoked.emit(transaction.productID, revDateMs)
+						let revReason: String
+						if #available(iOS 16.0, macOS 13.0, *) {
+							revReason = transaction.revocationReason == .developerIssue ? "developer_issue" : "other"
+						} else {
+							revReason = ""
+						}
+						self.productRevoked.emit(transaction.productID, revDateMs, revReason)
 					}
 
 					await self.updateProductStatus()
