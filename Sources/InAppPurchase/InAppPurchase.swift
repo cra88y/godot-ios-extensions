@@ -427,21 +427,28 @@ class InAppPurchase: RefCounted {
 			for await result: VerificationResult<Transaction> in Transaction.updates {
 				do {
 					let (transaction, jws) = try self.extractVerified(result)
-					await self.updateProductStatus()
-					await transaction.finish()
 
-					// Hop to main actor for signal emission
-					await MainActor.run {
-						if transaction.revocationDate == nil {
+					if transaction.revocationDate == nil {
+						// Purchased — update status and finish before emitting
+						await self.updateProductStatus()
+						await transaction.finish()
+						await MainActor.run {
 							self.productPurchased.emit(transaction.productID, jws)
+						}
+					} else {
+						// Revoked — do NOT finish; let Apple handle cleanup
+						guard let revDate = transaction.revocationDate else {
+							GD.pushWarning("Revocation signal fired but revocationDate is nil")
+							continue
+						}
+						let revDateMs = String(Int64(revDate.timeIntervalSince1970 * 1000))
+						let revReason: String
+						if #available(iOS 16.0, macOS 13.0, *) {
+							revReason = transaction.revocationReason == .developerIssue ? "developer_issue" : "other"
 						} else {
-							let revDateMs = String(Int64(transaction.revocationDate!.timeIntervalSince1970 * 1000))
-							let revReason: String
-							if #available(iOS 16.0, macOS 13.0, *) {
-								revReason = transaction.revocationReason == .developerIssue ? "developer_issue" : "other"
-							} else {
-								revReason = ""
-							}
+							revReason = ""
+						}
+						await MainActor.run {
 							self.productRevoked.emit(transaction.productID, revDateMs, revReason)
 						}
 					}
