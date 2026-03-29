@@ -143,6 +143,44 @@ class InAppPurchase: RefCounted {
 		return purchasedProducts.contains(productID)
 	}
 
+	/// Get display info for a single product.
+	///
+	/// - Parameters:
+	/// 	- productID: The product identifier.
+	/// 	- onComplete: Callback with parameters: (error: Variant, info: Variant) -> (error: Int, info: Dictionary)
+	@Callable(autoSnakeCase: true)
+	func getProductInfo(productID: String, onComplete: Callable) {
+		Task {
+			do {
+				let storeProducts = try await Product.products(for: [productID])
+				guard let storeProduct = storeProducts.first else {
+					onComplete.callDeferred(Variant(InAppPurchaseError.noSuchProduct.rawValue), nil)
+					return
+				}
+				var info = Dictionary()
+				info[Variant("display_name")] = Variant(storeProduct.displayName)
+				info[Variant("display_price")] = Variant(storeProduct.displayPrice)
+				info[Variant("description")] = Variant(storeProduct.description)
+				info[Variant("product_id")] = Variant(storeProduct.id)
+				var typeInt: Int = IAPProduct.TYPE_UNKNOWN
+				switch storeProduct.type {
+				case .consumable: typeInt = IAPProduct.TYPE_CONSUMABLE
+				case .nonConsumable: typeInt = IAPProduct.TYPE_NON_CONSUMABLE
+				case .autoRenewable: typeInt = IAPProduct.TYPE_AUTO_RENEWABLE
+				case .nonRenewable: typeInt = IAPProduct.TYPE_NON_RENEWABLE
+				default: typeInt = IAPProduct.TYPE_UNKNOWN
+				}
+				info[Variant("type")] = Variant(typeInt)
+				onComplete.callDeferred(Variant(OK), Variant(info))
+			} catch {
+				onComplete.callDeferred(
+					Variant(InAppPurchaseError.failedToGetProducts.rawValue),
+					nil
+				)
+			}
+		}
+	}
+
 	/// Get products
 	///
 	/// - Parameters:
