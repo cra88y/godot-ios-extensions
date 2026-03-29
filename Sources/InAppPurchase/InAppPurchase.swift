@@ -37,8 +37,8 @@ class InAppPurchase: RefCounted {
 
 	/// Called when a product is purchased — (productID: String, jwsRepresentation: String)
 	@Signal var productPurchased: SignalWithArguments<String, String>
-	/// Called when a purchase is revoked
-	@Signal var productRevoked: SignalWithArguments<String>
+	/// Called when a purchase is revoked — (productID: String, revocationDateMs: String)
+	@Signal var productRevoked: SignalWithArguments<String, String>
 
 	private(set) var productIDs: [String] = []
 
@@ -342,7 +342,8 @@ class InAppPurchase: RefCounted {
 					if transaction.revocationDate == nil {
 						self.productPurchased.emit(transaction.productID, jws)
 					} else {
-						self.productRevoked.emit(transaction.productID)
+						let revDateMs = String(Int64(transaction.revocationDate!.timeIntervalSince1970 * 1000))
+						self.productRevoked.emit(transaction.productID, revDateMs)
 					}
 
 					await self.updateProductStatus()
