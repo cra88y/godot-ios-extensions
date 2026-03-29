@@ -204,7 +204,9 @@ class InAppPurchase: RefCounted {
 						} else {
 							jws = ""
 						}
-						self.productPurchased.emit(transaction.productID, jws)
+						await MainActor.run {
+							self.productPurchased.emit(transaction.productID, jws)
+						}
 					}
 				}
 				onComplete.callDeferred(Variant(OK))
@@ -387,21 +389,24 @@ class InAppPurchase: RefCounted {
 			for await result: VerificationResult<Transaction> in Transaction.updates {
 				do {
 					let (transaction, jws) = try self.extractVerified(result)
-					if transaction.revocationDate == nil {
-						self.productPurchased.emit(transaction.productID, jws)
-					} else {
-						let revDateMs = String(Int64(transaction.revocationDate!.timeIntervalSince1970 * 1000))
-						let revReason: String
-						if #available(iOS 16.0, macOS 13.0, *) {
-							revReason = transaction.revocationReason == .developerIssue ? "developer_issue" : "other"
-						} else {
-							revReason = ""
-						}
-						self.productRevoked.emit(transaction.productID, revDateMs, revReason)
-					}
-
 					await self.updateProductStatus()
 					await transaction.finish()
+
+					// Hop to main actor for signal emission
+					await MainActor.run {
+						if transaction.revocationDate == nil {
+							self.productPurchased.emit(transaction.productID, jws)
+						} else {
+							let revDateMs = String(Int64(transaction.revocationDate!.timeIntervalSince1970 * 1000))
+							let revReason: String
+							if #available(iOS 16.0, macOS 13.0, *) {
+								revReason = transaction.revocationReason == .developerIssue ? "developer_issue" : "other"
+							} else {
+								revReason = ""
+							}
+							self.productRevoked.emit(transaction.productID, revDateMs, revReason)
+						}
+					}
 				} catch {
 					GD.pushWarning("Transaction failed verification")
 				}
