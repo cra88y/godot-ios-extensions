@@ -87,9 +87,8 @@ class InAppPurchase: RefCounted {
 					let result: Product.PurchaseResult = try await product.purchase()
 					switch result {
 					case .success(let verification):
-						// Success
-						let transaction: Transaction = try checkVerified(verification)
-						let jws: String = transaction.jwsRepresentation
+						// Success — extract JWS from VerificationResult before unwrapping
+						let (transaction, jws) = try self.extractVerified(verification)
 						await transaction.finish()
 
 						self.purchasedProducts.insert(transaction.productID)
@@ -196,6 +195,18 @@ class InAppPurchase: RefCounted {
 		Task {
 			do {
 				try await AppStore.sync()
+				// Re-emit JWS for server-side reconciliation
+				for await result in Transaction.currentEntitlements {
+					if case .verified(let transaction) = result {
+						let jws: String
+						if #available(iOS 16.0, macOS 13.0, *) {
+							jws = result.jwsRepresentation
+						} else {
+							jws = ""
+						}
+						self.productPurchased.emit(transaction.productID, jws)
+					}
+				}
 				onComplete.callDeferred(Variant(OK))
 			} catch {
 				GD.pushError("Failed to restore purchases: \(error)")
@@ -305,12 +316,21 @@ class InAppPurchase: RefCounted {
 		}
 	}
 
-	func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+	/// Extract a verified transaction and its JWS from a VerificationResult.
+	/// jwsRepresentation is only defined on VerificationResult<Transaction>,
+	/// so this method is non-generic to satisfy the type checker.
+	func extractVerified(_ result: VerificationResult<Transaction>) throws -> (Transaction, String) {
+		let jws: String
+		if #available(iOS 16.0, macOS 13.0, *) {
+			jws = result.jwsRepresentation
+		} else {
+			jws = ""
+		}
 		switch result {
+		case .verified(let transaction):
+			return (transaction, jws)
 		case .unverified:
 			throw StoreError.failedVerification
-		case .verified(let safe):
-			return safe
 		}
 	}
 
@@ -318,9 +338,9 @@ class InAppPurchase: RefCounted {
 		return Task.detached {
 			for await result: VerificationResult<Transaction> in Transaction.updates {
 				do {
-					let transaction: Transaction = try self.checkVerified(result)
+					let (transaction, jws) = try self.extractVerified(result)
 					if transaction.revocationDate == nil {
-						self.productPurchased.emit(transaction.productID, transaction.jwsRepresentation)
+						self.productPurchased.emit(transaction.productID, jws)
 					} else {
 						self.productRevoked.emit(transaction.productID)
 					}

@@ -1,4 +1,5 @@
 #!/bin/zsh
+set -euo pipefail
 
 # MARK: Help
 
