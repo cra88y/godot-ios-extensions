@@ -89,7 +89,14 @@ class InAppPurchase: RefCounted {
 					case .success(let verification):
 						// Success
 						let transaction: Transaction = try checkVerified(verification)
-						let jws: String = transaction.jwsRepresentation
+
+						let jws: String
+						if #available(iOS 16.0, macOS 13.0, *) {
+							jws = transaction.jwsRepresentation
+						} else {
+							jws = ""
+						}
+
 						await transaction.finish()
 
 						self.purchasedProducts.insert(transaction.productID)
@@ -320,7 +327,11 @@ class InAppPurchase: RefCounted {
 				do {
 					let transaction: Transaction = try self.checkVerified(result)
 					if transaction.revocationDate == nil {
-						self.productPurchased.emit(transaction.productID, transaction.jwsRepresentation)
+						if #available(iOS 16.0, macOS 13.0, *) {
+							self.productPurchased.emit(transaction.productID, transaction.jwsRepresentation)
+						} else {
+							self.productPurchased.emit(transaction.productID, "")
+						}
 					} else {
 						self.productRevoked.emit(transaction.productID)
 					}
