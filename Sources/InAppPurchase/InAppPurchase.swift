@@ -35,10 +35,10 @@ class InAppPurchase: RefCounted {
 		case error = 2
 	}
 
-	/// Called when a product is purchased — (productID: String, jwsRepresentation: String)
-	@Signal var productPurchased: SignalWithArguments<String, String>
-	/// Called when a purchase is revoked — (productID: String, revocationDateMs: String, revocationReason: String)
-	@Signal var productRevoked: SignalWithArguments<String, String, String>
+	/// Called when a product is purchased — (productID: String, jwsRepresentation: String, transactionId: String, originalTransactionId: String)
+	@Signal var productPurchased: SignalWithArguments<String, String, String, String>
+	/// Called when a purchase is revoked — (productID: String, revocationDateMs: String, revocationReason: String, transactionId: String)
+	@Signal var productRevoked: SignalWithArguments<String, String, String, String>
 
 	private(set) var productIDs: [String] = []
 
@@ -86,14 +86,14 @@ class InAppPurchase: RefCounted {
 				if let product: Product = try await getProduct(productID) {
 					let result: Product.PurchaseResult = try await product.purchase()
 					switch result {
-					case .success(let verification):
-						// Success — extract JWS from VerificationResult before unwrapping
-						let (transaction, jws) = try self.extractVerified(verification)
-						await transaction.finish()
+				case .success(let verification):
+					// Success — extract JWS from VerificationResult before unwrapping
+					let (transaction, jws, txId, origTxId) = try self.extractVerified(verification)
+					await transaction.finish()
 
-						self.purchasedProducts.insert(transaction.productID)
+					self.purchasedProducts.insert(transaction.productID)
 
-						self.productPurchased.emit(transaction.productID, jws)
+					self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
 
 						onComplete.callDeferred(
 							Variant(OK),
@@ -233,20 +233,22 @@ class InAppPurchase: RefCounted {
 		Task {
 			do {
 				try await AppStore.sync()
-				// Re-emit JWS for server-side reconciliation
-				for await result in Transaction.currentEntitlements {
-					if case .verified(let transaction) = result {
-						let jws: String
-						if #available(iOS 16.0, macOS 13.0, *) {
-							jws = result.jwsRepresentation
-						} else {
-							jws = ""
-						}
-						await MainActor.run {
-							self.productPurchased.emit(transaction.productID, jws)
-						}
+			// Re-emit JWS for server-side reconciliation
+			for await result in Transaction.currentEntitlements {
+				if case .verified(let transaction) = result {
+					let jws: String
+					if #available(iOS 16.0, macOS 13.0, *) {
+						jws = result.jwsRepresentation
+					} else {
+						jws = ""
+					}
+					let txId = String(transaction.id)
+					let origTxId = String(transaction.originalID)
+					await MainActor.run {
+						self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
 					}
 				}
+			}
 				onComplete.callDeferred(Variant(OK))
 			} catch {
 				GD.pushError("Failed to restore purchases: \(error)")
@@ -292,7 +294,10 @@ class InAppPurchase: RefCounted {
 						} else {
 							jws = ""
 						}
-						result[Variant(transaction.productID)] = Variant(jws)
+						let txId = String(transaction.id)
+						let origTxId = String(transaction.originalID)
+						// Pipe-separated: jws|transactionId|originalTransactionId
+						result[Variant(transaction.productID)] = Variant("\(jws)|\(txId)|\(origTxId)")
 					}
 				}
 				onComplete.callDeferred(Variant(OK), Variant(result))
@@ -407,7 +412,8 @@ class InAppPurchase: RefCounted {
 	/// Extract a verified transaction and its JWS from a VerificationResult.
 	/// jwsRepresentation is only defined on VerificationResult<Transaction>,
 	/// so this method is non-generic to satisfy the type checker.
-	func extractVerified(_ result: VerificationResult<Transaction>) throws -> (Transaction, String) {
+	/// Returns: (transaction, jws, transactionId, originalTransactionId)
+	func extractVerified(_ result: VerificationResult<Transaction>) throws -> (Transaction, String, String, String) {
 		let jws: String
 		if #available(iOS 16.0, macOS 13.0, *) {
 			jws = result.jwsRepresentation
@@ -416,7 +422,9 @@ class InAppPurchase: RefCounted {
 		}
 		switch result {
 		case .verified(let transaction):
-			return (transaction, jws)
+			let txId = String(transaction.id)
+			let origTxId = String(transaction.originalID)
+			return (transaction, jws, txId, origTxId)
 		case .unverified:
 			throw StoreError.failedVerification
 		}
@@ -426,14 +434,14 @@ class InAppPurchase: RefCounted {
 		return Task.detached {
 			for await result: VerificationResult<Transaction> in Transaction.updates {
 				do {
-					let (transaction, jws) = try self.extractVerified(result)
+					let (transaction, jws, txId, origTxId) = try self.extractVerified(result)
 
 					if transaction.revocationDate == nil {
 						// Purchased — update status and finish before emitting
 						await self.updateProductStatus()
 						await transaction.finish()
 						await MainActor.run {
-							self.productPurchased.emit(transaction.productID, jws)
+							self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
 						}
 					} else {
 						// Revoked — do NOT finish; let Apple handle cleanup
@@ -449,7 +457,7 @@ class InAppPurchase: RefCounted {
 							revReason = ""
 						}
 						await MainActor.run {
-							self.productRevoked.emit(transaction.productID, revDateMs, revReason)
+							self.productRevoked.emit(transaction.productID, revDateMs, revReason, txId)
 						}
 					}
 				} catch {
