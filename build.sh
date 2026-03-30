@@ -115,11 +115,19 @@ build_libs() {
 }
 
 # MARK: Formatting
-BOLD="$(tput bold)"
-GREEN="$(tput setaf 2)"
-CYAN="$(tput setaf 6)"
-RED="$(tput setaf 1)"
-RESET_FORMATTING="$(tput sgr0)"
+if [ -t 1 ]; then
+	BOLD="$(tput bold)"
+	GREEN="$(tput setaf 2)"
+	CYAN="$(tput setaf 6)"
+	RED="$(tput setaf 1)"
+	RESET_FORMATTING="$(tput sgr0)"
+else
+	BOLD=""
+	GREEN=""
+	CYAN=""
+	RED=""
+	RESET_FORMATTING=""
+fi
 
 # MARK: Run
 build_libs "$TARGET" "$CONFIG"
