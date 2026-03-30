@@ -17,16 +17,8 @@ BUILD_PATH_MACOS=".build"
 
 # MARK: Inputs
 
-TARGET=$1
-CONFIG=$2
-
-if [[ ! $TARGET ]]; then
-	TARGET="all"
-fi
-
-if [[ ! $CONFIG ]]; then
-	CONFIG="release"
-fi
+TARGET=${1:-all}
+CONFIG=${2:-release}
 
 COPY_COMMANDS=()
 
