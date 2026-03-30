@@ -157,7 +157,7 @@ class InAppPurchase: RefCounted {
 					onComplete.callDeferred(Variant(InAppPurchaseError.noSuchProduct.rawValue), nil)
 					return
 				}
-				var info = Dictionary()
+				var info: [Variant: Variant] = [:]
 				info[Variant("display_name")] = Variant(storeProduct.displayName)
 				info[Variant("display_price")] = Variant(storeProduct.displayPrice)
 				info[Variant("description")] = Variant(storeProduct.description)
@@ -285,7 +285,7 @@ class InAppPurchase: RefCounted {
 		Task {
 			do {
 				try await AppStore.sync()
-				var result = Dictionary()
+				var result: [Variant: Variant] = [:]
 				for await vr: VerificationResult<Transaction> in Transaction.currentEntitlements {
 					if case .verified(let transaction) = vr {
 						let jws: String
