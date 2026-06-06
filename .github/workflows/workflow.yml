@@ -75,16 +75,12 @@ jobs:
           fi
 
       # ===== BUILD =====
-      - name: Syntax Analysis
-        run: |
-          swift build -Xswiftc -typecheck
-
-      - name: Build macOS Libraries
+      - name: Fast Syntax & macOS Build (Fail Fast)
         run: |
           chmod +x build.sh
           ./build.sh macos release
 
-      - name: Build iOS Libraries
+      - name: iOS Framework Build (Heavy)
         run: |
           ./build.sh ios release
 
