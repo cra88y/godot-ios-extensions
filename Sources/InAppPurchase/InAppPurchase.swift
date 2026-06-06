@@ -1,5 +1,5 @@
 import StoreKit
-import SwiftGodot
+@preconcurrency import SwiftGodot
 
 #initSwiftExtension(
 	cdecl: "swift_entry_point",
@@ -16,7 +16,7 @@ public enum StoreError: Error {
 let OK: Int = 0
 
 @Godot
-class InAppPurchase: RefCounted {
+class InAppPurchase: RefCounted, @unchecked Sendable {
 	enum InAppPurchaseStatus: Int {
 		case purchaseOK = 0
 		case purchaseSuccessfulButUnverified = 2
