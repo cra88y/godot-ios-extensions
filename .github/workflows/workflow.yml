@@ -75,10 +75,14 @@ jobs:
           fi
 
       # ===== BUILD =====
-      - name: Run build script
+      - name: Fast Syntax & macOS Build (Fail Fast)
         run: |
           chmod +x build.sh
-          ./build.sh
+          ./build.sh macos release
+
+      - name: iOS Framework Build (Heavy)
+        run: |
+          ./build.sh ios release
 
       - name: Cache Statistics
         if: always()
