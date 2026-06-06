@@ -70,6 +70,20 @@ class InAppPurchase: RefCounted {
 			await updateProducts()
 			await updateProductStatus()
 
+			// Sweep unfinished transactions from prior crashed sessions
+			for await result in Transaction.unfinished {
+				do {
+					let (transaction, jws, txId, origTxId) = try self.extractVerified(result)
+					if transaction.revocationDate == nil {
+						await MainActor.run {
+							self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
+						}
+					}
+				} catch {
+					GD.pushWarning("Unfinished transaction failed verification")
+				}
+			}
+
 			onComplete.callDeferred()
 		}
 	}
@@ -78,22 +92,28 @@ class InAppPurchase: RefCounted {
 	///
 	/// - Parameters:
 	/// 	- productID: The identifier of the product that you enter in App Store Connect.
+	/// 	- appAccountToken: Optional UUID string to associate the purchase with a specific user.
 	/// 	- onComplete: Callback with parameter: (error: Variant, status: Variant) -> (error: Int `InAppPurchaseError`, status: Int `InAppPurchaseStatus`)
 	@Callable
-	func purchase(_ productID: String, onComplete: Callable) {
+	func purchase(_ productID: String, appAccountToken: String, onComplete: Callable) {
 		Task {
 			do {
 				if let product: Product = try await getProduct(productID) {
-					let result: Product.PurchaseResult = try await product.purchase()
+					var options: Set<Product.PurchaseOption> = []
+					if let uuid = UUID(uuidString: appAccountToken) {
+						options.insert(.appAccountToken(uuid))
+					}
+					let result: Product.PurchaseResult = try await product.purchase(options: options)
 					switch result {
 				case .success(let verification):
 					// Success — extract JWS from VerificationResult before unwrapping
 					let (transaction, jws, txId, origTxId) = try self.extractVerified(verification)
-					await transaction.finish()
 
 					self.purchasedProducts.insert(transaction.productID)
 
-					self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
+					await MainActor.run {
+						self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
+					}
 
 						onComplete.callDeferred(
 							Variant(OK),
@@ -233,22 +253,22 @@ class InAppPurchase: RefCounted {
 		Task {
 			do {
 				try await AppStore.sync()
-			// Re-emit JWS for server-side reconciliation
-			for await result in Transaction.currentEntitlements {
-				if case .verified(let transaction) = result {
-					let jws: String
-					if #available(iOS 16.0, macOS 13.0, *) {
-						jws = result.jwsRepresentation
-					} else {
-						jws = ""
-					}
-					let txId = String(transaction.id)
-					let origTxId = String(transaction.originalID)
-					await MainActor.run {
-						self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
+				// Re-emit JWS for server-side reconciliation
+				for await result in Transaction.currentEntitlements {
+					if case .verified(let transaction) = result {
+						let jws: String
+						if #available(iOS 16.0, macOS 13.0, *) {
+							jws = result.jwsRepresentation
+						} else {
+							jws = ""
+						}
+						let txId = String(transaction.id)
+						let origTxId = String(transaction.originalID)
+						await MainActor.run {
+							self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
+						}
 					}
 				}
-			}
 				onComplete.callDeferred(Variant(OK))
 			} catch {
 				GD.pushError("Failed to restore purchases: \(error)")
@@ -373,6 +393,27 @@ class InAppPurchase: RefCounted {
 		}
 	}
 
+	/// Finish a pending transaction by ID after server validation
+	///
+	/// - Parameters:
+	/// 	- transactionId: The ID of the transaction to finish
+	/// 	- onComplete: Callback with parameter: (error: Variant) -> (error: Int)
+	@Callable(autoSnakeCase: true)
+	public func finishTransaction(transactionId: String, onComplete: Callable) {
+		Task {
+			var found = false
+			for await result in Transaction.unfinished {
+				guard case .verified(let transaction) = result else { continue }
+				if String(transaction.id) == transactionId {
+					await transaction.finish()
+					found = true
+					break
+				}
+			}
+			onComplete.callDeferred(Variant(found ? OK : InAppPurchaseError.noSuchProduct.rawValue))
+		}
+	}
+
 	// Internal functionality
 
 	func getProduct(_ productIdentifier: String) async throws -> Product? {
@@ -437,9 +478,8 @@ class InAppPurchase: RefCounted {
 					let (transaction, jws, txId, origTxId) = try self.extractVerified(result)
 
 					if transaction.revocationDate == nil {
-						// Purchased — update status and finish before emitting
+						// Purchased — update status but defer finish until server validation
 						await self.updateProductStatus()
-						await transaction.finish()
 						await MainActor.run {
 							self.productPurchased.emit(transaction.productID, jws, txId, origTxId)
 						}
